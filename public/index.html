@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa Interativo da Bahia - Serviços do Detran</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <!-- Pré-carregar GeoJSON -->
+    <link rel="preload" href="/data/geo-ba.json" as="fetch" type="application/json" crossorigin="anonymous">
+</head>
+<body>
+    <!-- Painel de controles superior -->
+    <div class="controls-panel" id="controls-panel">
+        <div class="controls-section">
+            <label for="visualizacao">Visualização:</label>
+            <select id="visualizacao" class="control-select">
+                <option value="visao_geral">Visão Geral</option>
+                <option value="credenciados_cfc">Quantidade de CFCs</option>
+                <option value="credenciados_clinicas">Quantidade de Clínicas</option>
+                <option value="credenciados_ecv">Quantidade de ECVs</option>
+                <option value="credenciados_epiv">Quantidade de EPIVs</option>
+                <option value="credenciados_patio">Quantidade de Pátios</option>
+                <option value="servicos_cfc">Quantidade de Cursos (CFC)</option>
+                <option value="servicos_clinicas">Quantidade de Exames (Clínicas)</option>
+                <option value="servicos_ecv">Quantidade de Vistorias (ECV)</option>
+                <option value="servicos_epiv">Quantidade de Estampagens (EPIV)</option>
+                <option value="servicos_patio">Quantidade de Veículos Removidos (Pátio)</option>
+                <option value="frota_total">Frota Total de Veículos</option>
+            </select>
+        </div>
+        
+        <div class="controls-section">
+            <label for="municipios">Municípios:</label>
+            <select id="municipios" class="control-select" multiple="multiple">
+                <!-- Será preenchido via JavaScript -->
+            </select>
+        </div>
+        
+        <div class="controls-section">
+            <label for="razao-social">Razão Social:</label>
+            <select id="razao-social" class="control-select">
+                <option value="">Selecione uma razão social</option>
+                <!-- Será preenchido via JavaScript -->
+            </select>
+        </div>
+        
+        <div class="controls-section">
+            <label for="cnpj">CNPJ:</label>
+            <select id="cnpj" class="control-select">
+                <option value="">Selecione um CNPJ</option>
+                <!-- Será preenchido via JavaScript -->
+            </select>
+        </div>
+        
+        <div class="controls-section">
+            <button id="limpar-filtros" class="control-button">
+                <i class="fas fa-eraser"></i> Limpar Filtros
+            </button>
+        </div>
+    </div>
+
+    <!-- Sidebar para informações detalhadas -->
+    <div class="sidebar hidden" id="sidebar">
+        <div class="sidebar-header">
+            <h2>Informações</h2>
+            <button id="close-sidebar" class="close-button" title="Fechar painel">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="info-panel">
+            <div id="info-content">
+                <p>Clique em um município para ver informações detalhadas.</p>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Desenvolvido para o Detran-BA</p>
+        </div>
+    </div>
+    
+    <!-- Container do mapa -->
+    <div class="map-container expanded" id="map-container">
+        <div id="mapa"></div>
+        <!-- Indicador de Carregamento -->
+        <div id="loading-overlay" class="loading-overlay"> <!-- Removido 'hidden' para ser visível por padrão -->
+            <div class="spinner"></div>
+            <p>Carregando mapa...</p> <!-- Texto ajustado -->
+        </div>
+    </div>
+
+    <!-- Botão para abrir a sidebar -->
+    <button id="open-sidebar" class="open-button visible" title="Abrir painel">
+        <i class="fas fa-info-circle"></i>
+    </button>
+
+    <!-- Legenda de filtros aplicados -->
+    <div class="filtros-legenda" id="filtros-legenda">
+        <h4>Filtros Aplicados</h4>
+        <div id="legenda-content">
+            <!-- Será preenchido via JavaScript -->
+        </div>
+    </div>
+
+    <script src="js/mapa.js"></script>
+</body>
+</html>
