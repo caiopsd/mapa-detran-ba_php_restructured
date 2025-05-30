@@ -27,7 +27,7 @@ const corDestaqueCNPJ = '#5cb85c';
 // Inicialização do mapa
 document.addEventListener("DOMContentLoaded", function() {
     inicializarMapa();
-    carregarDados(currentVisualizacao); // Carrega dados iniciais
+    carregarDados(currentVisualizacao);
     
     // Inicializar Select2 para seletores
     $("#municipios").select2({
@@ -58,7 +58,12 @@ document.addEventListener("DOMContentLoaded", function() {
             razaoSocialSection.style.display = '';
             cnpjSection.style.display = '';
         }
-        // Chamar a função que carrega os dados (ela agora gerencia o overlay)
+        // Mostrar overlay de carregamento IMEDIATAMENTE ao trocar a visualização
+        const loadingOverlay = document.getElementById('loading-overlay');
+        if (loadingOverlay) {
+            loadingOverlay.classList.remove('hidden');
+        }
+        // Chamar a função que carrega os dados (ela também gerencia o overlay)
         carregarDados(currentVisualizacao);
     });
     
@@ -88,10 +93,7 @@ document.addEventListener("DOMContentLoaded", function() {
     const closeButton = document.getElementById("close-sidebar");
 
     // Fechar pelo botão X
-    closeButton.addEventListener("click", function(event) {
-        event.stopPropagation();
-        fecharSidebar();
-    });
+    closeButton.addEventListener("click", fecharSidebar);
 
     // Abrir pelo botão de menu
     openButton.addEventListener("click", function(event) {
@@ -101,9 +103,15 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // Fechar clicando fora da sidebar
     document.addEventListener("click", function(event) {
-        // Fecha se clicar fora da sidebar e ela estiver aberta
+        // Verifica se a sidebar está visível E o clique NÃO foi dentro da sidebar E NÃO foi no botão de abrir E a sidebar NÃO acabou de ser aberta
         if (sidebarVisible && !sidebar.contains(event.target) && !openButton.contains(event.target)) {
-            fecharSidebar();
+            if (sidebarJustOpened) {
+                // Se a sidebar acabou de ser aberta pelo clique no município, ignora este clique e reseta a flag
+                sidebarJustOpened = false;
+            } else {
+                // Se não foi aberta agora, fecha a sidebar
+                fecharSidebar();
+            }
         }
     });
 
@@ -120,521 +128,363 @@ document.addEventListener("DOMContentLoaded", function() {
     carregarDadosSeletores();
 });
 
+// Função para carregar dados para os seletores
+async function carregarDadosSeletores() {
+    // Carregar lista de municípios
+    fetch('/api/municipios')
+        .then(response => response.json())
+        .then(data => {
+            todosMunicipios = data;
+            
+            // Preencher seletor de municípios
+            const seletorMunicipios = document.getElementById('municipios');
+            seletorMunicipios.innerHTML = '';
+            
+            data.forEach(municipio => {
+                const option = document.createElement('option');
+                option.value = municipio.id;
+                option.textContent = municipio.nome;
+                seletorMunicipios.appendChild(option);
+            });
+            
+            // Atualizar Select2
+            $('#municipios').trigger('change');
+        })
+        .catch(error => {
+            console.error('Erro ao carregar municípios:', error);
+        });
+
+    try {
+        // Usa o endpoint /api/credenciados do seu backend PHP
+        const responseCredenciados = await fetch('/api/credenciados'); 
+
+        if (!responseCredenciados.ok) {
+            const errorText = await responseCredenciados.text();
+            console.error(`HTTP error fetching /api/credenciados: ${responseCredenciados.status}. Response: ${errorText}`);
+            throw new Error(`HTTP error fetching credenciados list: ${responseCredenciados.status}`);
+        }
+
+        const contentType = responseCredenciados.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            const responseText = await responseCredenciados.text();
+            console.error("Server did not return JSON for /api/credenciados. Response:", responseText);
+            throw new Error("Server did not return JSON for credenciados list.");
+        }
+
+        todosCredenciados = await responseCredenciados.json(); 
+
+        // Validação: Verifique se o id_municipio está presente após a alteração no backend
+        if (todosCredenciados.length > 0 && todosCredenciados[0].id_municipio === undefined) {
+            console.warn("Dados de /api/credenciados recebidos, mas 'id_municipio' está faltando. Verifique a alteração no backend PHP.");
+        }
+
+        const selectRazaoSocial = $("#razao-social");
+        const selectCNPJ = $("#cnpj");
+
+        const rsPlaceholderOption = selectRazaoSocial.find('option[value=""]').clone();
+        selectRazaoSocial.empty();
+        if(rsPlaceholderOption.length) selectRazaoSocial.append(rsPlaceholderOption); else selectRazaoSocial.append(new Option("Selecione uma razão social", ""));
+
+        const cnpjPlaceholderOption = selectCNPJ.find('option[value=""]').clone();
+        selectCNPJ.empty();
+        if(cnpjPlaceholderOption.length) selectCNPJ.append(cnpjPlaceholderOption); else selectCNPJ.append(new Option("Selecione um CNPJ", ""));
+        
+        const razoesSociais = new Set();
+        const cnpjsMap = new Map(); 
+
+        if (todosCredenciados && Array.isArray(todosCredenciados)) {
+            todosCredenciados.forEach(cred => {
+                if (cred.razao_social) {
+                    razoesSociais.add(String(cred.razao_social).trim());
+                }
+                if (cred.cnpj) {
+                    const cnpjOriginal = String(cred.cnpj).trim();
+                    const cnpjNormalizado = cnpjOriginal.replace(/\D/g, ''); 
+                    if (cnpjNormalizado.length > 0 && !cnpjsMap.has(cnpjNormalizado)) {
+                        cnpjsMap.set(cnpjNormalizado, formatarCNPJ(cnpjOriginal)); 
+                    }
+                }
+            });
+        } else {
+            console.warn("Nenhum dado em 'todosCredenciados' ou formato incorreto após fetch de /api/credenciados.");
+        }
+
+        Array.from(razoesSociais).sort((a,b) => a.localeCompare(b)).forEach(rs => {
+            selectRazaoSocial.append(new Option(rs, rs));
+        });
+
+        const sortedCnpjs = Array.from(cnpjsMap.entries()).sort((a, b) => a[1].localeCompare(b[1])); 
+        sortedCnpjs.forEach(([cnpjNormalizado, cnpjFormatado]) => {
+            selectCNPJ.append(new Option(cnpjFormatado, cnpjNormalizado)); 
+        });
+        
+        if (selectRazaoSocial.data('select2')) selectRazaoSocial.trigger('change.select2');
+        if (selectCNPJ.data('select2')) selectCNPJ.trigger('change.select2');
+
+    } catch (error) {
+        console.error("Erro na função carregarDadosSeletores (Razão Social/CNPJ):", error);
+        // alert("Falha ao carregar opções de filtro para Razão Social e CNPJ.");
+    }
+}
+
+// Função para aplicar filtros e destacar municípios
+function aplicarFiltros() {
+    console.log('Aplicando filtros...');
+    console.log('Municípios filtrados:', municipiosFiltrados);
+    console.log('Razão social filtrada:', razaoSocialFiltrada);
+    console.log('CNPJ filtrado:', cnpjFiltrado);
+    
+    if (!geojson) {
+        console.error('GeoJSON não está disponível');
+        return;
+    }
+    
+    // Resetar estilos
+    geojson.eachLayer(function(layer) {
+        layer.setStyle(estiloPadrao(layer.feature));
+    });
+    
+    // Aplicar destaque para municípios selecionados
+    if (municipiosFiltrados.length > 0) {
+        geojson.eachLayer(function(layer) {
+            const municipioId = layer.feature.properties.id;
+            if (municipiosFiltrados.includes(municipioId.toString())) {
+                layer.setStyle({
+                    weight: 3,
+                    color: corDestaqueMunicipio,
+                    dashArray: '',
+                    fillColor: corDestaqueMunicipio,
+                    fillOpacity: 0.7
+                });
+                
+                if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                    layer.bringToFront();
+                }
+            }
+        });
+    }
+    
+    // Aplicar destaque para razão social
+    if (razaoSocialFiltrada) {
+        // Encontrar municípios com esta razão social
+        const municipiosComRazaoSocial = encontrarMunicipiosPorRazaoSocial(razaoSocialFiltrada);
+        console.log('Municípios com razão social:', municipiosComRazaoSocial);
+        
+        geojson.eachLayer(function(layer) {
+            const municipioId = layer.feature.properties.id;
+            if (municipiosComRazaoSocial.includes(municipioId.toString())) {
+                layer.setStyle({
+                    weight: 3,
+                    color: corDestaqueRazaoSocial,
+                    dashArray: '',
+                    fillColor: corDestaqueRazaoSocial,
+                    fillOpacity: 0.7
+                });
+                
+                if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                    layer.bringToFront();
+                }
+            }
+        });
+    }
+    
+    // Aplicar destaque para CNPJ
+    if (cnpjFiltrado) {
+        // Encontrar municípios com este CNPJ
+        const municipiosComCNPJ = encontrarMunicipiosPorCNPJ(cnpjFiltrado);
+        console.log('Municípios com CNPJ:', municipiosComCNPJ);
+        
+        geojson.eachLayer(function(layer) {
+            const municipioId = layer.feature.properties.id;
+            if (municipiosComCNPJ.includes(municipioId.toString())) {
+                layer.setStyle({
+                    weight: 3,
+                    color: corDestaqueCNPJ,
+                    dashArray: '',
+                    fillColor: corDestaqueCNPJ,
+                    fillOpacity: 0.7
+                });
+                
+                if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                    layer.bringToFront();
+                }
+            }
+        });
+    }
+    
+    // Atualizar legenda de filtros
+    atualizarLegendaFiltros();
+}
+
+// Função para encontrar municípios por razão social
+function encontrarMunicipiosPorRazaoSocial(razaoSocial) {
+    const municipiosIds = [];
+    
+    todosCredenciados.forEach(credenciado => {
+        if (credenciado.razao_social === razaoSocial) {
+            municipiosIds.push(credenciado.id_municipio.toString());
+        }
+    });
+    
+    return [...new Set(municipiosIds)]; // Remover duplicatas
+}
+
+// Função para encontrar municípios por CNPJ
+function encontrarMunicipiosPorCNPJ(cnpj) {
+    const municipiosIds = [];
+    
+    todosCredenciados.forEach(credenciado => {
+        if (credenciado.cnpj === cnpj) {
+            municipiosIds.push(credenciado.id_municipio.toString());
+        }
+    });
+    
+    return [...new Set(municipiosIds)]; // Remover duplicatas
+}
+
+// Função para atualizar a legenda de filtros aplicados
+function atualizarLegendaFiltros() {
+    const legendaContent = document.getElementById('legenda-content');
+    legendaContent.innerHTML = '';
+    
+    // Verificar se há algum filtro aplicado
+    if (municipiosFiltrados.length === 0 && !razaoSocialFiltrada && !cnpjFiltrado) {
+        legendaContent.innerHTML = '<p>Nenhum filtro aplicado</p>';
+        return;
+    }
+    
+    // Adicionar municípios filtrados
+    if (municipiosFiltrados.length > 0) {
+        const nomesMunicipios = municipiosFiltrados.map(id => {
+            const municipio = todosMunicipios.find(m => m.id.toString() === id);
+            return municipio ? municipio.nome : id;
+        });
+        
+        const item = document.createElement('div');
+        item.className = 'filtro-item';
+        item.innerHTML = `
+            <div class="filtro-cor" style="background-color: ${corDestaqueMunicipio}"></div>
+            <div class="filtro-texto">Municípios: ${nomesMunicipios.join(', ')}</div>
+            <button class="filtro-remover" data-tipo="municipios">×</button>
+        `;
+        legendaContent.appendChild(item);
+        
+        // Adicionar evento para remover filtro
+        item.querySelector('.filtro-remover').addEventListener('click', function() {
+            $('#municipios').val(null).trigger('change');
+        });
+    }
+    
+    // Adicionar razão social filtrada
+    if (razaoSocialFiltrada) {
+        const item = document.createElement('div');
+        item.className = 'filtro-item';
+        item.innerHTML = `
+            <div class="filtro-cor" style="background-color: ${corDestaqueRazaoSocial}"></div>
+            <div class="filtro-texto">Razão Social: ${razaoSocialFiltrada}</div>
+            <button class="filtro-remover" data-tipo="razao-social">×</button>
+        `;
+        legendaContent.appendChild(item);
+        
+        // Adicionar evento para remover filtro
+        item.querySelector('.filtro-remover').addEventListener('click', function() {
+            $('#razao-social').val('').trigger('change');
+        });
+    }
+    
+    // Adicionar CNPJ filtrado
+    if (cnpjFiltrado) {
+        const item = document.createElement('div');
+        item.className = 'filtro-item';
+        item.innerHTML = `
+            <div class="filtro-cor" style="background-color: ${corDestaqueCNPJ}"></div>
+            <div class="filtro-texto">CNPJ: ${formatarCNPJ(cnpjFiltrado)}</div>
+            <button class="filtro-remover" data-tipo="cnpj">×</button>
+        `;
+        legendaContent.appendChild(item);
+        
+        // Adicionar evento para remover filtro
+        item.querySelector('.filtro-remover').addEventListener('click', function() {
+            $('#cnpj').val('').trigger('change');
+        });
+    }
+}
+
+// Função para limpar todos os filtros
+function limparFiltros() {
+    // Limpar seletores
+    $('#municipios').val(null).trigger('change');
+    $('#razao-social').val('').trigger('change');
+    $('#cnpj').val('').trigger('change');
+    
+    // Limpar variáveis
+    municipiosFiltrados = [];
+    razaoSocialFiltrada = null;
+    cnpjFiltrado = null;
+    
+    // Resetar estilos do mapa
+    if (geojson) {
+        geojson.eachLayer(function(layer) {
+            layer.setStyle(estiloPadrao(layer.feature));
+        });
+    }
+    
+    // Atualizar legenda
+    atualizarLegendaFiltros();
+}
+
+// Função para fechar a sidebar
+function fecharSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const mapContainer = document.getElementById('map-container');
+    const openButton = document.getElementById('open-sidebar');
+    
+    sidebar.classList.add('hidden');
+    mapContainer.classList.add('expanded');
+    openButton.classList.add('visible');
+    sidebarVisible = false;
+}
+
+// Função para abrir a sidebar
+function abrirSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const mapContainer = document.getElementById('map-container');
+    const openButton = document.getElementById('open-sidebar');
+    
+    sidebar.classList.remove('hidden');
+    mapContainer.classList.remove('expanded');
+    openButton.classList.remove('visible');
+    sidebarVisible = true;
+}
+
+// Função para inicializar o mapa
 function inicializarMapa() {
     // Coordenadas aproximadas do centro da Bahia
     const centroBahia = [-12.5, -41.7];
     
     // Criar o mapa
-    map = L.map("mapa").setView(centroBahia, 7);
+    map = L.map('mapa').setView(centroBahia, 7);
     
     // Adicionar camada de mapa base (OpenStreetMap)
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
     
     // Carregar o GeoJSON da Bahia
-    fetch("/data/geo-ba.json")
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
+    fetch('/data/geo-ba.json')
+        .then(response => response.json())
         .then(data => {
+            // Armazenar o GeoJSON para uso posterior
             geojson = L.geoJson(data, {
                 style: estiloPadrao,
                 onEachFeature: onEachFeature
             }).addTo(map);
-            console.log("GeoJSON carregado e adicionado ao mapa.");
-            // Esconder o overlay de carregamento inicial (do mapa)
-            const loadingOverlay = document.getElementById('loading-overlay');
-            if (loadingOverlay) {
-                loadingOverlay.classList.add('hidden');
-            }
         })
         .catch(error => {
-            console.error("Erro ao carregar o GeoJSON:", error);
-            const loadingOverlay = document.getElementById('loading-overlay');
-            if (loadingOverlay) {
-                 loadingOverlay.innerHTML = '<p class="error">Erro ao carregar mapa. Tente recarregar a página.</p>';
-            }
-        });
-
-    // Controle de informações
-    info = L.control();
-    info.onAdd = function (map) {
-        this._div = L.DomUtil.create("div", "info");
-        this.update();
-        return this._div;
-    };
-    info.update = function (props) {
-        this._div.innerHTML = "" + (props ?
-            "<b>" + props.name + "</b><br />" + (dadosMunicipios[props.id] ? formatarValor(dadosMunicipios[props.id].valor) + " " + getUnidadeMedida(currentVisualizacao) : "Dados não disponíveis") :
-            "");
-    };
-    info.addTo(map);
-
-    // Legenda
-    legend = L.control({ position: "bottomright" });
-    legend.onAdd = function (map) {
-        const div = L.DomUtil.create("div", "info legend");
-        atualizarLegenda(div);
-        return div;
-    };
-    legend.addTo(map);
-}
-
-function getUnidadeMedida(visualizacao) {
-    switch (visualizacao) {
-        case 'frota_total': return 'veículos';
-        case 'credenciados_cfc':
-        case 'credenciados_clinicas':
-        case 'credenciados_ecv':
-        case 'credenciados_epiv':
-        case 'credenciados_patio': return 'credenciados';
-        case 'servicos_cfc': return 'cursos';
-        case 'servicos_clinicas': return 'exames';
-        case 'servicos_ecv': return 'vistorias';
-        case 'servicos_epiv': return 'estampagens';
-        case 'servicos_patio': return 'veículos removidos';
-        default: return '';
-    }
-}
-
-function atualizarLegenda(div) {
-    div = div || legend.getContainer();
-    if (!div) return;
-
-    div.innerHTML = ''; // Limpar legenda existente
-    const titulo = getTituloLegenda(currentVisualizacao);
-    div.innerHTML += `<h4>${titulo}</h4>`;
-
-    if (legendaIntervalos.length > 0) {
-        for (let i = 0; i < legendaIntervalos.length; i++) {
-            const inicio = legendaIntervalos[i];
-            const fim = legendaIntervalos[i + 1];
-            const cor = cores[i];
-
-            div.innerHTML +=
-                `<i style="background:${cor}"></i> ` +
-                formatarValor(inicio) + (fim ? "&ndash;" + formatarValor(fim) : "+");
-            div.innerHTML += '<br>';
-        }
-    } else {
-        div.innerHTML += '';
-    }
-}
-
-function getTituloLegenda(visualizacao) {
-    switch (visualizacao) {
-        case 'visao_geral': return 'Visão Geral';
-        case 'frota_total': return 'Frota Total';
-        case 'credenciados_cfc': return 'Quantidade de CFCs';
-        case 'credenciados_clinicas': return 'Quantidade de Clínicas';
-        case 'credenciados_ecv': return 'Quantidade de ECVs';
-        case 'credenciados_epiv': return 'Quantidade de EPIVs';
-        case 'credenciados_patio': return 'Quantidade de Pátios';
-        case 'servicos_cfc': return 'Quantidade de Cursos (CFC)';
-        case 'servicos_clinicas': return 'Quantidade de Exames (Clínicas)';
-        case 'servicos_ecv': return 'Quantidade de Vistorias (ECV)';
-        case 'servicos_epiv': return 'Quantidade de Estampagens (EPIV)';
-        case 'servicos_patio': return 'Quantidade de Veículos Removidos (Pátio)';
-        default: return 'Legenda';
-    }
-}
-
-function carregarDados(visualizacao) {
-    console.log('Carregando dados para visualização:', visualizacao);
-    let endpoint = '';
-
-    // Mostrar overlay de carregamento ANTES de buscar
-    const loadingOverlay = document.getElementById("loading-overlay");
-    if (loadingOverlay) {
-        loadingOverlay.classList.remove("hidden");
-        // Atualizar texto para indicar carregamento de dados
-        const loadingText = loadingOverlay.querySelector("p");
-        if (loadingText) loadingText.textContent = "Carregando dados...";
-    }
-
-    switch (visualizacao) {
-        case 'visao_geral': endpoint = '/api/credenciados/total'; break;
-        case 'frota_total': endpoint = '/api/frotas'; break;
-        case 'credenciados_cfc': endpoint = '/api/credenciados/cfc'; break;
-        case 'credenciados_clinicas': endpoint = '/api/credenciados/clinicas'; break;
-        case 'credenciados_ecv': endpoint = '/api/credenciados/ecv'; break;
-        case 'credenciados_epiv': endpoint = '/api/credenciados/epiv'; break;
-        case 'credenciados_patio': endpoint = '/api/credenciados/patio'; break;
-        case 'servicos_cfc': endpoint = '/api/servicos/cfc'; break;
-        case 'servicos_clinicas': endpoint = '/api/servicos/clinicas'; break;
-        case 'servicos_ecv': endpoint = '/api/servicos/ecv'; break;
-        case 'servicos_epiv': endpoint = '/api/servicos/epiv'; break;
-        case 'servicos_patio': endpoint = '/api/servicos/patio'; break;
-        default: endpoint = '/api/credenciados/total'; // Fallback
-    }
-
-    fetch(endpoint)
-        .then(response => {
-             if (!response.ok) {
-                throw new Error(`Erro HTTP: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            processarDados(data, visualizacao);
-            if (geojson) {
-                geojson.eachLayer(layer => {
-                    const id = layer.feature.properties.id;
-                    layer.setStyle(getEstilo(id));
-                });
-            }
-            atualizarLegenda();
-        })
-        .catch(error => {
-            console.error('Erro ao carregar dados:', error);
-            alert(`Erro ao carregar dados para a visualização '${visualizacao}'. Verifique o console para detalhes.`);
-            // Limpar dados antigos para evitar confusão
-            dadosMunicipios = {};
-            legendaIntervalos = [];
-            if (geojson) {
-                 geojson.eachLayer(layer => {
-                    layer.setStyle(estiloPadrao(layer.feature));
-                });
-            }
-            atualizarLegenda();
-        })
-        .finally(() => {
-            // Esconder overlay de carregamento SEMPRE (sucesso ou erro)
-            if (loadingOverlay) {
-                loadingOverlay.classList.add("hidden");
-            }
-        });
-}
-
-function processarDados(data, visualizacao) {
-    dadosMunicipios = {};
-    let valores = [];
-
-    data.forEach(item => {
-        let valor;
-        const id = item.id_municipio;
-
-        switch (visualizacao) {
-            case 'visao_geral': valor = item.total_credenciados || 0; break;
-            case 'frota_total': valor = item.total_frota || 0; break;
-            case 'credenciados_cfc': valor = item.total_cfc || 0; break;
-            case 'credenciados_clinicas': valor = item.total_clinicas || 0; break;
-            case 'credenciados_ecv': valor = item.total_ecv || 0; break;
-            case 'credenciados_epiv': valor = item.total_epiv || 0; break;
-            case 'credenciados_patio': valor = item.total_patio || 0; break;
-            case 'servicos_cfc': valor = item.total_cursos || 0; break;
-            case 'servicos_clinicas': valor = item.total_exames || 0; break;
-            case 'servicos_ecv': valor = item.total_vistorias || 0; break;
-            case 'servicos_epiv': valor = item.total_estampagens || 0; break;
-            case 'servicos_patio': valor = item.total_veiculos_removidos || 0; break;
-            default: valor = 0;
-        }
-        dadosMunicipios[id] = { valor: valor };
-        if (valor > 0) {
-            valores.push(valor);
-        }
-    });
-
-    // Calcular intervalos para a legenda (exemplo simples com quantis)
-    if (valores.length > 0) {
-        valores.sort((a, b) => a - b);
-        const numIntervalos = Math.min(cores.length, valores.length);
-        legendaIntervalos = [0]; // Começa com 0
-        for (let i = 1; i <= numIntervalos; i++) {
-            const index = Math.ceil(i * valores.length / numIntervalos) - 1;
-            // Evitar duplicatas nos intervalos
-            if (valores[index] > legendaIntervalos[legendaIntervalos.length - 1]) {
-                 legendaIntervalos.push(valores[index]);
-            }
-        }
-         // Se o último intervalo calculado for menor que o máximo, adiciona o máximo
-        const maxVal = Math.max(...valores);
-        if (legendaIntervalos[legendaIntervalos.length - 1] < maxVal) {
-             // Remove o último se for igual ao penúltimo antes de adicionar o max
-             if(legendaIntervalos.length > 1 && legendaIntervalos[legendaIntervalos.length - 1] === legendaIntervalos[legendaIntervalos.length - 2]) {
-                 legendaIntervalos.pop();
-             }
-             // Adiciona o máximo apenas se for maior que o último intervalo atual
-             if (maxVal > legendaIntervalos[legendaIntervalos.length - 1]) {
-                legendaIntervalos.push(maxVal);
-             }
-        }
-        // Garante que não haja mais intervalos que cores
-        while(legendaIntervalos.length > cores.length + 1) {
-            legendaIntervalos.splice(legendaIntervalos.length - 2, 1); // Remove o penúltimo
-        }
-        // Remove o 0 inicial se não houver valores entre 0 e o próximo intervalo
-        if (legendaIntervalos.length > 1 && legendaIntervalos[1] === 0) {
-            legendaIntervalos.shift();
-        }
-
-    } else {
-        legendaIntervalos = [];
-    }
-    console.log("Intervalos da legenda:", legendaIntervalos);
-}
-
-function getCor(valor) {
-    if (valor === undefined || valor === null || valor <= 0) {
-        return '#CCCCCC'; // Cor padrão para dados ausentes ou zero
-    }
-    for (let i = 0; i < legendaIntervalos.length; i++) {
-        if (valor <= legendaIntervalos[i + 1]) {
-            return cores[i];
-        }
-    }
-    // Se for maior que o último intervalo
-    return cores[cores.length - 1]; 
-}
-
-function estiloPadrao(feature) {
-    return {
-        fillColor: '#CCCCCC', // Cor padrão inicial
-        weight: 1,
-        opacity: 1,
-        color: 'white',
-        dashArray: '3',
-        fillOpacity: 0.7
-    };
-}
-
-function getEstilo(municipioId) {
-    const dados = dadosMunicipios[municipioId];
-    const valor = dados ? dados.valor : 0;
-    const cor = getCor(valor);
-
-    // Verificar se o município está destacado por algum filtro
-    const isMunicipioFiltrado = municipiosFiltrados.includes(municipioId.toString());
-    const isRazaoSocialFiltrada = razaoSocialFiltrada && encontrarMunicipiosPorRazaoSocial(razaoSocialFiltrada).includes(municipioId.toString());
-    const isCnpjFiltrado = cnpjFiltrado && encontrarMunicipiosPorCNPJ(cnpjFiltrado).includes(municipioId.toString());
-
-    let estilo = {
-        fillColor: cor,
-        weight: 1,
-        opacity: 1,
-        color: 'white',
-        dashArray: '3',
-        fillOpacity: 0.7
-    };
-
-    // Aplicar estilos de destaque sobrepostos
-    if (isMunicipioFiltrado) {
-        estilo.weight = 3;
-        estilo.color = corDestaqueMunicipio;
-        estilo.dashArray = '';
-        estilo.fillColor = corDestaqueMunicipio; // Sobrescreve a cor base
-        estilo.fillOpacity = 0.8;
-    }
-    if (isRazaoSocialFiltrada) {
-        estilo.weight = estilo.weight > 1 ? estilo.weight : 2; // Aumenta se já destacado
-        estilo.color = corDestaqueRazaoSocial;
-        estilo.dashArray = '';
-        // Não sobrescreve fillColor se já destacado por município
-        if (!isMunicipioFiltrado) {
-             estilo.fillColor = corDestaqueRazaoSocial;
-             estilo.fillOpacity = 0.8;
-        }
-    }
-    if (isCnpjFiltrado) {
-        estilo.weight = estilo.weight > 1 ? estilo.weight : 2;
-        estilo.color = corDestaqueCNPJ;
-        estilo.dashArray = '';
-         // Não sobrescreve fillColor se já destacado por município ou razão
-        if (!isMunicipioFiltrado && !isRazaoSocialFiltrada) {
-            estilo.fillColor = corDestaqueCNPJ;
-            estilo.fillOpacity = 0.8;
-        }
-    }
-
-    return estilo;
-}
-
-function onEachFeature(feature, layer) {
-    layer.on({
-        mouseover: destacarFeature,
-        mouseout: resetarDestaque,
-        click: mostrarInfoMunicipio
-    });
-}
-
-function destacarFeature(e) {
-    const layer = e.target;
-    const props = layer.feature.properties;
-
-    // Estilo temporário de hover
-    layer.setStyle({
-        weight: 3,
-        color: '#666',
-        dashArray: '',
-        fillOpacity: 0.8
-    });
-
-    if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
-        layer.bringToFront();
-    }
-
-    info.update(props);
-}
-
-function resetarDestaque(e) {
-    const layer = e.target;
-    const id = layer.feature.properties.id;
-    // Reseta para o estilo definido pelos dados e filtros
-    layer.setStyle(getEstilo(id));
-    info.update();
-}
-
-function mostrarInfoMunicipio(e) {
-    const layer = e.target;
-    const props = layer.feature.properties;
-    municipioSelecionado = props.id;
-
-    // Centralizar e dar zoom (opcional)
-    // map.fitBounds(layer.getBounds());
-
-    // Buscar detalhes do município para a sidebar
-    fetch(`/api/municipio/${props.id}/detalhes`)
-        .then(response => response.json())
-        .then(data => {
-            detalhesMunicipio = data;
-            atualizarSidebar();
-            abrirSidebar();
-        })
-        .catch(error => {
-            console.error('Erro ao buscar detalhes do município:', error);
-            // Exibir mensagem de erro na sidebar
+            console.error('Erro ao carregar o GeoJSON:', error);
             document.getElementById('info-content').innerHTML = 
-                '<p class="error">Erro ao carregar detalhes. Tente novamente.</p>';
-            abrirSidebar(); // Abrir mesmo com erro para mostrar a mensagem
+                '<p class="error">Erro ao carregar o mapa. Por favor, tente novamente mais tarde.</p>';
         });
-}
-
-function atualizarSidebar() {
-    const infoContent = document.getElementById('info-content');
-    const titleElement = document.getElementById('info-title'); // Assumindo que existe um elemento para o título
-    if (!detalhesMunicipio) {
-        infoContent.innerHTML = '<p>Selecione um município para ver os detalhes.</p>';
-        if (titleElement) titleElement.textContent = 'Informações';
-        return;
-    }
-
-    if (titleElement) titleElement.textContent = detalhesMunicipio.nome || 'Detalhes do Município';
-
-    let html = `
-        <div class="info-section">
-            <h3>Dados Gerais</h3>
-            <p><strong>População:</strong> ${formatarValor(detalhesMunicipio.populacao || 0)} habitantes</p>
-            <p><strong>Frota Total:</strong> ${formatarValor(detalhesMunicipio.frota_total || 0)} veículos</p>
-            <p><strong>Habitantes por Veículo:</strong> ${calcularHabitantesPorVeiculo(detalhesMunicipio.populacao, detalhesMunicipio.frota_total)}</p>
-        </div>
-    `;
-
-    if (detalhesMunicipio.credenciados && Object.keys(detalhesMunicipio.credenciados).length > 0) {
-        html += `<div class="info-section"><h3>Credenciados</h3>`;
-        const tipos = {
-            cfc: 'Centros de Formação de Condutores',
-            clinicas: 'Clínicas',
-            ecv: 'Empresas Credenciadas de Vistoria',
-            epiv: 'Estampadores de Placas',
-            patio: 'Pátios'
-        };
-
-        for (const tipo in tipos) {
-            if (detalhesMunicipio.credenciados[tipo] && detalhesMunicipio.credenciados[tipo].length > 0) {
-                html += `<h4>${tipos[tipo]} (${detalhesMunicipio.credenciados[tipo].length})</h4><ul>`;
-                detalhesMunicipio.credenciados[tipo].forEach(cred => {
-                    html += `<li>${cred.razao_social} (${formatarCNPJ(cred.cnpj)})</li>`;
-                });
-                html += `</ul>`;
-            }
-        }
-        html += `</div>`;
-    }
-
-    if (detalhesMunicipio.servicos && Object.keys(detalhesMunicipio.servicos).length > 0) {
-        html += `<div class="info-section"><h3>Serviços (Ano: ${detalhesMunicipio.servicos.ano || 'N/A'})</h3>`;
-        const tiposServico = {
-            cfc: 'CFC',
-            clinicas: 'Clínicas',
-            ecv: 'ECV',
-            epiv: 'EPIV',
-            patio: 'Pátio'
-        };
-
-        for (const tipo in tiposServico) {
-            if (detalhesMunicipio.servicos[tipo] && detalhesMunicipio.servicos[tipo].detalhamento.length > 0) {
-                html += `<h4>${tiposServico[tipo]} (Total: ${formatarValor(detalhesMunicipio.servicos[tipo].total)})</h4><ul>`;
-                detalhesMunicipio.servicos[tipo].detalhamento.forEach(det => {
-                    html += `<li>${det.tipo}: ${formatarValor(det.quantidade)}</li>`;
-                });
-                html += `</ul>`;
-            }
-        }
-        html += `</div>`;
-    }
-
-    infoContent.innerHTML = html;
-}
-
-// Funções para abrir e fechar a sidebar
-function abrirSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const mapaContainer = document.getElementById('map-container');
-    const openButton = document.getElementById('open-sidebar');
-
-    sidebar.classList.remove('hidden');
-    mapaContainer.classList.remove('expanded');
-    openButton.classList.remove('visible');
-    sidebarVisible = true;
-    sidebarJustOpened = true; // Marca que foi aberta recentemente
-
-    // Atualizar o tamanho do mapa após a transição da sidebar
-    setTimeout(() => {
-        if (map) {
-            map.invalidateSize();
-        }
-    }, 300); // Tempo da transição CSS
-}
-
-function fecharSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const mapaContainer = document.getElementById('map-container');
-    const openButton = document.getElementById('open-sidebar');
-
-    sidebar.classList.add('hidden');
-    mapaContainer.classList.add('expanded');
-    openButton.classList.add('visible');
-    sidebarVisible = false;
-
-    // Atualizar o tamanho do mapa após a transição da sidebar
-    setTimeout(() => {
-        if (map) {
-            map.invalidateSize();
-        }
-    }, 300); // Tempo da transição CSS
-}
-
-// Funções utilitárias
-function formatarValor(valor) {
-    if (valor === undefined || valor === null) return 'N/A';
-    return valor.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-}
-
-function formatarCNPJ(cnpj) {
-    if (!cnpj) return '';
-    const numeros = cnpj.replace(/\D/g, '');
-    if (numeros.length !== 14) return cnpj; // Retorna original se não tiver 14 dígitos
-    return numeros.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
-}
-
-function calcularHabitantesPorVeiculo(populacao, frota) {
-    if (!populacao || !frota || frota === 0) return 'N/A';
-    const razao = populacao / frota;
-    return razao.toFixed(2);
 }
 
 // Função para carregar dados da API conforme a visualização selecionada
