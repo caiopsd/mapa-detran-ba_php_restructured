@@ -131,7 +131,7 @@ document.addEventListener("DOMContentLoaded", function() {
 // Função para carregar dados para os seletores
 async function carregarDadosSeletores() {
     // Carregar lista de municípios
-    fetch('/municipios.php')
+    fetch('./municipios.php')
         .then(response => response.json())
         .then(data => {
             todosMunicipios = data;
@@ -471,7 +471,7 @@ function inicializarMapa() {
     }).addTo(map);
     
     // Carregar o GeoJSON da Bahia
-    fetch('/data/geo-ba.json')
+    fetch('./data/geo-ba.json')
         .then(response => response.json())
         .then(data => {
             // Armazenar o GeoJSON para uso posterior
