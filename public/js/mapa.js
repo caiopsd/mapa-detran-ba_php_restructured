@@ -131,7 +131,7 @@ document.addEventListener("DOMContentLoaded", function() {
 // Função para carregar dados para os seletores
 async function carregarDadosSeletores() {
     // Carregar lista de municípios
-    fetch('/api/municipios')
+    fetch('/municipios.php')
         .then(response => response.json())
         .then(data => {
             todosMunicipios = data;
@@ -156,7 +156,7 @@ async function carregarDadosSeletores() {
 
     try {
         // Usa o endpoint /api/credenciados do seu backend PHP
-        const responseCredenciados = await fetch('/api/credenciados'); 
+        const responseCredenciados = await fetch('/credenciados.php'); 
 
         if (!responseCredenciados.ok) {
             const errorText = await responseCredenciados.text();
@@ -501,43 +501,43 @@ function carregarDados(tipoVisualizacao) {
     switch(tipoVisualizacao) {
         case 'credenciados_total':
         case 'visao_geral':
-            endpoint = '/api/credenciados/total';
+            endpoint = '/credenciados_total.php';
             break;
         case 'credenciados_cfc':
-            endpoint = '/api/credenciados/cfc';
+            endpoint = '/credenciados_tipo.php?tipo=cfc';
             break;
         case 'credenciados_clinicas':
-            endpoint = '/api/credenciados/clinicas';
+            endpoint = '/credenciados_tipo.php?tipo=clinicas';
             break;
         case 'credenciados_ecv':
-            endpoint = '/api/credenciados/ecv';
+            endpoint = '/credenciados_tipo.php?tipo=ecv';
             break;
         case 'credenciados_epiv':
-            endpoint = '/api/credenciados/epiv';
+            endpoint = '/credenciados_tipo.php?tipo=epiv';
             break;
         case 'credenciados_patio':
-            endpoint = '/api/credenciados/patio';
+            endpoint = '/credenciados_tipo.php?tipo=patio';
             break;
         case 'servicos_cfc':
-            endpoint = '/api/servicos/cfc';
+            endpoint = '/servicos_tipo.php?tipo=cfc';
             break;
         case 'servicos_clinicas':
-            endpoint = '/api/servicos/clinicas';
+            endpoint = '/servicos_tipo.php?tipo=clinicas';
             break;
         case 'servicos_ecv':
-            endpoint = '/api/servicos/ecv';
+            endpoint = '/servicos_tipo.php?tipo=ecv';
             break;
         case 'servicos_epiv':
-            endpoint = '/api/servicos/epiv';
+            endpoint = '/servicos_tipo.php?tipo=epiv';
             break;
         case 'servicos_patio':
-            endpoint = '/api/servicos/patio';
+            endpoint = '/servicos_tipo.php?tipo=patio';
             break;
         case 'frota_total':
-            endpoint = '/api/frotas';
+            endpoint = '/frotas.php';
             break;
         default:
-            endpoint = '/api/credenciados/total';
+            endpoint = '/credenciados_total.php';
     }
     
     // Buscar dados da API
@@ -551,7 +551,7 @@ function carregarDados(tipoVisualizacao) {
             });
             // Se for visão geral, buscar e mesclar dados de frota
             if (tipoVisualizacao === 'visao_geral') {
-                fetch('/api/frotas')
+                fetch('/frotas.php')
                     .then(resp => resp.json())
                     .then(frotas => {
                         frotas.forEach(frota => {

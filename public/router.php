@@ -22,6 +22,15 @@ if (strpos($path, '/api/') === 0) {
     exit;
 }
 
+// Roteamento de arquivos PHP no public
+if ($requestedFilePath && strpos($requestedFilePath, $publicDir) === 0 && is_file($requestedFilePath)) {
+    $ext = pathinfo($requestedFilePath, PATHINFO_EXTENSION);
+    if ($ext === 'php') {
+        require $requestedFilePath;
+        exit;
+    }
+}
+
 // Verifica se o arquivo solicitado existe DENTRO do diretório público
 // e NÃO é um arquivo PHP
 if ($requestedFilePath && strpos($requestedFilePath, $publicDir) === 0 && is_file($requestedFilePath) && pathinfo($requestedFilePath, PATHINFO_EXTENSION) !== 'php') {
