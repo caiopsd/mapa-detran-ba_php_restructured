@@ -332,14 +332,14 @@ function encontrarMunicipiosPorRazaoSocial(razaoSocial) {
 // Função para encontrar municípios por CNPJ
 function encontrarMunicipiosPorCNPJ(cnpj) {
     const municipiosIds = [];
-    
+    // Formatar o CNPJ filtrado para o padrão do banco (xx.xxx.xxx/xxxx-xx)
+    const filtroCNPJ = formatarCNPJ(cnpj);
     todosCredenciados.forEach(credenciado => {
-        if (credenciado.cnpj === cnpj) {
+        if (credenciado.cnpj === filtroCNPJ) {
             municipiosIds.push(credenciado.id_municipio.toString());
         }
     });
-    
-    return [...new Set(municipiosIds)]; // Remover duplicatas
+    return [...new Set(municipiosIds)];
 }
 
 // Função para atualizar a legenda de filtros aplicados
