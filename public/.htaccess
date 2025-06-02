@@ -1,0 +1,33 @@
+# Configuração para servir index.html como página padrão
+DirectoryIndex index.html
+
+# Configuração para API PHP
+RewriteEngine On
+
+# Habilitar PHP
+AddHandler application/x-httpd-php .php
+
+# Permitir CORS para requisições AJAX
+Header always set Access-Control-Allow-Origin "*"
+Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+
+# Garantir que arquivos PHP sejam executados
+<Files "*.php">
+    SetHandler application/x-httpd-php
+</Files>
+
+# Roteamento para arquivos PHP da API
+RewriteRule ^api/(.*)$ router.php [QSA,L]
+
+# Cache para arquivos estáticos
+<FilesMatch "\.(css|js|png|jpg|jpeg|gif|ico|svg)$">
+    ExpiresActive On
+    ExpiresDefault "access plus 1 month"
+</FilesMatch>
+
+# Cache para arquivos JSON
+<FilesMatch "\.json$">
+    ExpiresActive On
+    ExpiresDefault "access plus 1 day"
+</FilesMatch>

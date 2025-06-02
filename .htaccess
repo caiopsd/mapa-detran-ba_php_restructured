@@ -1,0 +1,12 @@
+# Configuração para redirecionamento
+Options +FollowSymLinks
+RewriteEngine On
+
+# Se a URL não aponta para a pasta public, redirecionar para lá
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ public/$1 [L]
+
+# Página padrão
+DirectoryIndex public/index.html
