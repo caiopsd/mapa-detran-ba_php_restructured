@@ -977,8 +977,49 @@ function carregarDetalhesMunicipio(municipioId, municipioNome) {
     document.getElementById('info-content').innerHTML = '<p>Carregando informações...</p>';
       // Buscar detalhes do município na API
     fetch(`./municipio_detalhes.php?id=${municipioId}`)
-        .then(response => response.json())
+        .then(async response => {
+            console.log('Status da resposta:', response.status);
+            console.log('Headers da resposta:', response.headers);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            // Verificar se o content-type é JSON
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                const textResponse = await response.text();
+                console.error('Resposta não é JSON. Content-Type:', contentType);
+                console.error('Conteúdo da resposta:', textResponse);
+                throw new Error(`Resposta não é JSON válido. Content-Type: ${contentType}`);
+            }
+            
+            // Obter o texto da resposta primeiro para debug
+            const responseText = await response.text();
+            console.log('Texto da resposta:', responseText);
+            
+            // Verificar se a resposta está vazia
+            if (!responseText.trim()) {
+                throw new Error('Resposta vazia do servidor');
+            }
+            
+            // Tentar fazer parse do JSON
+            try {
+                return JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('Erro ao fazer parse do JSON:', parseError);
+                console.error('Texto que causou o erro:', responseText);
+                throw new Error(`Erro ao processar JSON: ${parseError.message}`);
+            }
+        })
         .then(data => {
+            console.log('Dados recebidos:', data);
+            
+            // Verificar se os dados são válidos
+            if (!data) {
+                throw new Error('Dados recebidos são nulos ou indefinidos');
+            }
+            
             // Armazenar detalhes para uso posterior
             detalhesMunicipio = data;
             
@@ -987,8 +1028,22 @@ function carregarDetalhesMunicipio(municipioId, municipioNome) {
         })
         .catch(error => {
             console.error('Erro ao carregar detalhes do município:', error);
+            
+            let mensagemErro = 'Erro ao carregar detalhes. ';
+            
+            if (error.message.includes('HTTP error')) {
+                mensagemErro += 'Erro de comunicação com o servidor.';
+            } else if (error.message.includes('JSON')) {
+                mensagemErro += 'Erro no formato dos dados recebidos.';
+            } else if (error.message.includes('Resposta vazia')) {
+                mensagemErro += 'Nenhum dado encontrado para este município.';
+            } else {
+                mensagemErro += 'Por favor, tente novamente mais tarde.';
+            }
+            
             document.getElementById('info-content').innerHTML = 
-                '<p class="error">Erro ao carregar detalhes. Por favor, tente novamente mais tarde.</p>';
+                `<p class="error">${mensagemErro}</p>
+                 <p><small>Erro técnico: ${error.message}</small></p>`;
         });
 }
 
