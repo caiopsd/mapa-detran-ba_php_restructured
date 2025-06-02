@@ -152,22 +152,20 @@ async function carregarDadosSeletores() {
         })
         .catch(error => {
             console.error('Erro ao carregar municípios:', error);
-        });
-
-    try {
-        // Usa o endpoint /api/credenciados do seu backend PHP
-        const responseCredenciados = await fetch('/credenciados.php'); 
+        });    try {
+        // Usa o endpoint credenciados.php do diretório público
+        const responseCredenciados = await fetch('./credenciados.php'); 
 
         if (!responseCredenciados.ok) {
             const errorText = await responseCredenciados.text();
-            console.error(`HTTP error fetching /api/credenciados: ${responseCredenciados.status}. Response: ${errorText}`);
+            console.error(`HTTP error fetching ./credenciados.php: ${responseCredenciados.status}. Response: ${errorText}`);
             throw new Error(`HTTP error fetching credenciados list: ${responseCredenciados.status}`);
         }
 
         const contentType = responseCredenciados.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
             const responseText = await responseCredenciados.text();
-            console.error("Server did not return JSON for /api/credenciados. Response:", responseText);
+            console.error("Server did not return JSON for ./credenciados.php. Response:", responseText);
             throw new Error("Server did not return JSON for credenciados list.");
         }
 
@@ -496,48 +494,47 @@ function carregarDados(tipoVisualizacao) {
     if (loadingOverlay) {
         loadingOverlay.classList.remove('hidden');
     }
-    
-    // Definir o endpoint com base no tipo de visualização
+      // Definir o endpoint com base no tipo de visualização
     switch(tipoVisualizacao) {
         case 'credenciados_total':
         case 'visao_geral':
-            endpoint = '/credenciados_total.php';
+            endpoint = './credenciados_total.php';
             break;
         case 'credenciados_cfc':
-            endpoint = '/credenciados_tipo.php?tipo=cfc';
+            endpoint = './credenciados_tipo.php?tipo=cfc';
             break;
         case 'credenciados_clinicas':
-            endpoint = '/credenciados_tipo.php?tipo=clinicas';
+            endpoint = './credenciados_tipo.php?tipo=clinicas';
             break;
         case 'credenciados_ecv':
-            endpoint = '/credenciados_tipo.php?tipo=ecv';
+            endpoint = './credenciados_tipo.php?tipo=ecv';
             break;
         case 'credenciados_epiv':
-            endpoint = '/credenciados_tipo.php?tipo=epiv';
+            endpoint = './credenciados_tipo.php?tipo=epiv';
             break;
         case 'credenciados_patio':
-            endpoint = '/credenciados_tipo.php?tipo=patio';
+            endpoint = './credenciados_tipo.php?tipo=patio';
             break;
         case 'servicos_cfc':
-            endpoint = '/servicos_tipo.php?tipo=cfc';
+            endpoint = './servicos_tipo.php?tipo=cfc';
             break;
         case 'servicos_clinicas':
-            endpoint = '/servicos_tipo.php?tipo=clinicas';
+            endpoint = './servicos_tipo.php?tipo=clinicas';
             break;
         case 'servicos_ecv':
-            endpoint = '/servicos_tipo.php?tipo=ecv';
+            endpoint = './servicos_tipo.php?tipo=ecv';
             break;
         case 'servicos_epiv':
-            endpoint = '/servicos_tipo.php?tipo=epiv';
+            endpoint = './servicos_tipo.php?tipo=epiv';
             break;
         case 'servicos_patio':
-            endpoint = '/servicos_tipo.php?tipo=patio';
+            endpoint = './servicos_tipo.php?tipo=patio';
             break;
         case 'frota_total':
-            endpoint = '/frotas.php';
+            endpoint = './frotas.php';
             break;
         default:
-            endpoint = '/credenciados_total.php';
+            endpoint = './credenciados_total.php';
     }
     
     // Buscar dados da API
@@ -548,10 +545,9 @@ function carregarDados(tipoVisualizacao) {
             dadosMunicipios = {};
             data.forEach(item => {
                 dadosMunicipios[item.id_municipio] = item;
-            });
-            // Se for visão geral, buscar e mesclar dados de frota
+            });            // Se for visão geral, buscar e mesclar dados de frota
             if (tipoVisualizacao === 'visao_geral') {
-                fetch('/frotas.php')
+                fetch('./frotas.php')
                     .then(resp => resp.json())
                     .then(frotas => {
                         frotas.forEach(frota => {
@@ -978,9 +974,8 @@ function zoomToFeature(e) {
 function carregarDetalhesMunicipio(municipioId, municipioNome) {
     // Mostrar mensagem de carregamento
     document.getElementById('info-content').innerHTML = '<p>Carregando informações...</p>';
-    
-    // Buscar detalhes do município na API
-    fetch(`/api/municipio/${municipioId}/detalhes`)
+      // Buscar detalhes do município na API
+    fetch(`./municipio_detalhes.php?id=${municipioId}`)
         .then(response => response.json())
         .then(data => {
             // Armazenar detalhes para uso posterior
